@@ -6,9 +6,9 @@ on:
         description: URL APK
         required: true
       flags:
-        description: "Flags APK_PATCHER (contoh: --ads --crc)"
+        description: Flags APK_PATCHER
         required: false
-        default: "--ads --crc"
+        default: --ads --crc
 jobs:
   patch:
     runs-on: ubuntu-24.04
@@ -17,24 +17,25 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: 17
       - name: Fix struktur + tooling
         run: |
           ln -sfn PATCH Patch
-          ZA=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f 2>/dev/null | sort | tail -1)
-          if [ -n "$ZA" ]; then sudo ln -sf "$ZA" /usr/local/bin/zipalign; echo "zipalign ok"; fi
+          ZA=$(find $ANDROID_HOME/build-tools -name zipalign -type f 2>/dev/null | sort | tail -1)
+          if [ -n $ZA$' ]; then sudo ln -sf $ZA$' /usr/local/bin/zipalign; echo zipalign-ok; fi
           curl -sLo /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
-          printf '#!/bin/bash\nexec java -jar /tmp/apktool.jar "$" + "@"\n' "$$" | sudo tee /usr/local/bin/apktool >/dev/null
+          printf '#!/bin/bash\nexec java -jar /tmp/apktool.jar "$@"\n' | sudo tee /usr/local/bin/apktool >/dev/null
           sudo chmod +x /usr/local/bin/apktool
           apktool --version
       - name: Download APK
         run: |
-          curl -sL --retry 3 -o app.apk "${{ inputs.apk_url }}"
-          file app.apk; ls -la app.apk
+          curl -sL --retry 3 -o app.apk '${{ inputs.apk_url }}'
+          file app.apk
+          ls -la app.apk
       - name: Run patcher
         run: |
           python3 APK_PATCHER.py -i app.apk -o patched ${{ inputs.flags }} -v
-          echo "--- hasil ---"
+          echo hasil:
           ls -la patched/ || true
       - name: Upload hasil
         if: always()
