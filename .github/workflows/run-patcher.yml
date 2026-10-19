@@ -37,10 +37,16 @@ jobs:
           python3 APK_PATCHER.py -i app.apk -o patched ${{ inputs.flags }} -v
           echo hasil:
           ls -la patched/ || true
+      - name: KPN MainActivity stub (banner creation path)
+        run: |
+          apktool d -f -q patched/patched_app.apk -o dec_k
+          python3 Utils/kpn_adpath.py dec_k || true
+          apktool b -q dec_k -o patched/patched_app2.apk
+          ls -la patched/
       - name: Native signature-check bypass
         run: |
           pip3 install --quiet pyelftools capstone || pip install --quiet pyelftools capstone
-          python3 Utils/native_sig_bypass.py patched/patched_app.apk patched/patched_nb.apk 2>/dev/null || python3 Utils/native_sig_bypass.py patched/patched_app.apk patched/patched_nb.apk
+          python3 Utils/native_sig_bypass.py patched/patched_app2.apk patched/patched_nb.apk 2>/dev/null || python3 Utils/native_sig_bypass.py patched/patched_app2.apk patched/patched_nb.apk
           ls -la patched/
       - name: Re-sign (zipalign + apksigner v1+v2+v3)
         run: |
