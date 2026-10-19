@@ -40,22 +40,17 @@ class Patch:
         if ' abstract' in head:
             return block
         head = re.sub(r'\s+native\b', '', head)
+        mreg = re.search(r'^\s*\.(registers|locals)\s+(\d+)\s*$', block, re.M)
+        reg_line = mreg.group(0).strip() if mreg else '.registers 1'
         if is_ctor or ret == 'V':
             body = ['    const/4 v0, 0x0', '    return-void']
-            regs = 1
         elif ret[0] in ('L', '['):
             body = ['    const/4 v0, 0x0', '    return-object v0']
-            regs = 1
-        elif ret == 'J' or ret == 'D':
+        elif ret in ('J', 'D'):
             body = ['    const-wide/16 v0, 0x0', '    return-wide v0']
-            regs = 2
-        elif ret == 'F':
+        else:  # Z B S I F
             body = ['    const/4 v0, 0x0', '    return v0']
-            regs = 1
-        else:  # Z B S I
-            body = ['    const/4 v0, 0x0', '    return v0']
-            regs = 1
-        return head + '\n    .registers ' + str(regs) + '\n' + '\n'.join(body) + '\n.end method'
+        return head + "\n" + reg_line + "\n" + "\n".join(body) + "\n.end method"
 
     def apply(self, decompiled_dir, args):
         print(f"[+] Applying {self.name}")
