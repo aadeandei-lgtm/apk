@@ -22,7 +22,7 @@ jobs:
         run: |
           ln -sfn PATCH Patch
           ZA=$(find $ANDROID_HOME/build-tools -name zipalign -type f 2>/dev/null | sort | tail -1)
-          if [ -n $ZA$' ]; then sudo ln -sf $ZA$' /usr/local/bin/zipalign; echo zipalign-ok; fi
+          if [ -n "$ZA" ]' ]; then sudo ln -sf "$ZA" /usr/local/bin/zipalign; echo zipalign-ok; fi
           curl -sLo /tmp/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.10.0/apktool_2.10.0.jar
           printf '#!/bin/bash\nexec java -jar /tmp/apktool.jar "$@"\n' | sudo tee /usr/local/bin/apktool >/dev/null
           sudo chmod +x /usr/local/bin/apktool
