@@ -37,10 +37,15 @@ jobs:
           python3 APK_PATCHER.py -i app.apk -o patched ${{ inputs.flags }} -v
           echo hasil:
           ls -la patched/ || true
+      - name: Native signature-check bypass
+        run: |
+          pip3 install --quiet pyelftools capstone || pip install --quiet pyelftools capstone
+          python3 Utils/native_sig_bypass.py patched/patched_app.apk patched/patched_nb.apk 2>/dev/null || python3 Utils/native_sig_bypass.py patched/patched_app.apk patched/patched_nb.apk
+          ls -la patched/
       - name: Re-sign (zipalign + apksigner v1+v2+v3)
         run: |
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
-          "$BT/zipalign" -f 4 patched/patched_app.apk patched/aligned.apk
+          "$BT/zipalign" -f 4 patched/patched_nb.apk patched/aligned.apk
           keytool -genkeypair -v -keystore ks.jks -alias patcher -storepass patchpass -keypass patchpass -dname "CN=APKPatcher" -keyalg RSA -keysize 2048 -validity 3650 >/dev/null 2>&1
           "$BT/apksigner" sign --ks ks.jks --ks-pass pass:patchpass --v2-signing-enabled true --v3-signing-enabled true patched/aligned.apk
           mv patched/aligned.apk patched/patched_signed.apk
