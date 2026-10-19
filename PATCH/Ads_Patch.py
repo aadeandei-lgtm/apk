@@ -3,60 +3,83 @@ import os
 import re
 from pathlib import Path
 
+AD_PACKAGES = [
+    'com/google/android/gms/ads',
+    'com/google/ads',
+    'com/facebook/ads',
+    'com/unity3d/ads',
+    'com/applovin',
+    'com/vungle',
+    'com/ironsource',
+    'com/adcolony',
+    'com/chartboost',
+    'com/inmobi',
+    'com/mopub',
+    'com/startapp',
+    'com/admob',
+    'com/google/android/gms/internal/ads',
+]
+
+METHOD_RE = re.compile(r'^\.method\b.*?^\.end method', re.S | re.M)
+
+
 class Patch:
     def __init__(self):
         self.name = "Ads Patch"
-        self.description = "Remove advertisements"
-    
+        self.description = "Neutralize ad SDKs by stubbing their method bodies (dexer-safe)"
+
+    def _is_ad_file(self, rel):
+        return any(rel.startswith(p) for p in AD_PACKAGES)
+
+    def _stub_method(self, block):
+        first = block.split('\n', 0)
+        head = block[:block.index('\n')]
+        is_ctor = '<init>' in head or '<clinit>' in head
+        mm = re.search(r'\)(\S+)', head)
+        ret = mm.group(1) if mm else 'V'
+        if ' abstract' in head:
+            return block
+        head = re.sub(r'\s+native\b', '', head)
+        if is_ctor or ret == 'V':
+            body = ['    const/4 v0, 0x0', '    return-void']
+            regs = 1
+        elif ret[0] in ('L', '['):
+            body = ['    const/4 v0, 0x0', '    return-object v0']
+            regs = 1
+        elif ret == 'J' or ret == 'D':
+            body = ['    const-wide/16 v0, 0x0', '    return-wide v0']
+            regs = 2
+        elif ret == 'F':
+            body = ['    const/4 v0, 0x0', '    return v0']
+            regs = 1
+        else:  # Z B S I
+            body = ['    const/4 v0, 0x0', '    return v0']
+            regs = 1
+        return head + '\n    .registers ' + str(regs) + '\n' + '\n'.join(body) + '\n.end method'
+
     def apply(self, decompiled_dir, args):
-        """Remove ads from app"""
         print(f"[+] Applying {self.name}")
-        
-        # Ad SDK patterns
-        ad_patterns = [
-            'com/google/android/gms/ads',
-            'com/google/ads',
-            'com/facebook/ads',
-            'com/unity3d/ads',
-            'com/applovin',
-            'com/vungle',
-            'com/ironsource',
-            'com/adcolony',
-            'com/chartboost',
-            'com/inmobi',
-            'com/mopub',
-            'com/startapp',
-            'com/admob',
-            'com/advertising',
-            'com/adMob',
-            'com/amazon/ads',
-            'com/verizon/ads'
-        ]
-        
-        smali_dir = Path(decompiled_dir) / "smali"
-        if not smali_dir.exists():
+        base = Path(decompiled_dir)
+        smali_roots = [base / d for d in os.listdir(base)
+                       if d == 'smali' or d.startswith('smali_classes')]
+        if not smali_roots:
             print("[-] smali directory not found")
             return False
-        
-        patched_count = 0
-        for smali_file in smali_dir.rglob("*.smali"):
-            try:
-                with open(smali_file, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-                
-                modified = False
-                for pattern in ad_patterns:
-                    if pattern in content:
-                        # Replace with no-op
-                        content = content.replace(pattern, 'Lnoop/ad')
-                        modified = True
-                
-                if modified:
-                    with open(smali_file, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    patched_count += 1
-            except Exception as e:
-                print(f"[-] Error patching {smali_file}: {e}")
-        
-        print(f"[+] Patched {patched_count} files")
-        return True
+
+        total = 0
+        for smali_dir in smali_roots:
+            for smali_file in smali_dir.rglob("*.smali"):
+                rel = str(smali_file.relative_to(smali_dir)).replace(os.sep, '/')
+                if not self._is_ad_file(rel):
+                    continue
+                try:
+                    content = smali_file.read_text(encoding='utf-8', errors='ignore')
+                    stubbed = METHOD_RE.sub(lambda m: self._stub_method(m.group(0)), content)
+                    if stubbed != content:
+                        smali_file.write_text(stubbed, encoding='utf-8')
+                        total += 1
+                except Exception as e:
+                    print(f"[-] Error patching {smali_file}: {e}")
+
+        print(f"[+] Stubbed ad files: {total}")
+        return total > 0
